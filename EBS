@@ -1,0 +1,96 @@
+EBS creation and attach to ec2 
+file system and mount the device to folder
+
+now we will see practical of EBS attach to ec2
+
+---------------------------------------
+Amazon EBS Volume Types
+Solid-State Drives (SSD) (	1 GiB - 16 TiB),Hard Disk Drives (HDD)(500 GiB - 16 TiB)
+then create a volume and attach to ec2
+Note:volume must me in same region of ec2 server in order to attach 
+
+[root@ip-172-31-27-91 ~]# df -h
+Filesystem      Size  Used Avail Use% Mounted on
+devtmpfs        475M     0  475M   0% /dev
+tmpfs           492M     0  492M   0% /dev/shm
+tmpfs           492M  392K  492M   1% /run
+tmpfs           492M     0  492M   0% /sys/fs/cgroup
+/dev/xvda1       10G  1.3G  8.7G  13% /
+tmpfs            99M     0   99M   0% /run/user/1000
+
+[root@ip-172-31-27-91 ~]# lsblk
+NAME    MAJ:MIN RM SIZE RO TYPE MOUNTPOINT
+xvda    202:0    0  10G  0 disk
+└─xvda1 202:1    0  10G  0 part /
+xvdf    202:80   0   3G  0 disk
+
+now we attached 3gb to ec2,now we need to mount it 
+so for that we need to create a folder and check the file system for the device xvdf 3gb,if file system is not there we need to create a new file system
+as below
+
+Use the file -s command to get information about a device, such as its file system type.
+[root@ip-172-31-27-91 ~]# file -s /dev/xvdf
+/dev/xvdf: data
+
+so there is no file system for xvdf device 
+we need to create a file system as below with mkfs command
+
+[root@ip-172-31-27-91 ~]# mkfs -t xfs /dev/xvdf
+meta-data=/dev/xvdf              isize=512    agcount=4, agsize=196608 blks
+         =                       sectsz=512   attr=2, projid32bit=1
+         =                       crc=1        finobt=1, sparse=0
+data     =                       bsize=4096   blocks=786432, imaxpct=25
+         =                       sunit=0      swidth=0 blks
+naming   =version 2              bsize=4096   ascii-ci=0 ftype=1
+log      =internal log           bsize=4096   blocks=2560, version=2
+         =                       sectsz=512   sunit=0 blks, lazy-count=1
+realtime =none                   extsz=4096   blocks=0, rtextents=0
+[root@ip-172-31-27-91 ~]# file -s /dev/xvdf
+/dev/xvdf: SGI XFS filesystem data (blksz 4096, inosz 512, v2 dirs) 
+so that means file system is created
+
+now we can mount
+Use the mkdir command to create a mount point directory for the volume. The mount point is where the volume is located in the 
+file system tree and where you read and write files to after you mount the volume.
+
+[root@ip-172-31-27-91 ~]# mkdir /ebs (created a folder called ebs )
+[root@ip-172-31-27-91 ~]# sudo mount /dev/xvdf /ebs (then mount the volume to ebs folder)
+[root@ip-172-31-27-91 ~]# df -h(checking whether volume is attached or not)
+Filesystem      Size  Used Avail Use% Mounted on
+devtmpfs        475M     0  475M   0% /dev
+tmpfs           492M     0  492M   0% /dev/shm
+tmpfs           492M  396K  492M   1% /run
+tmpfs           492M     0  492M   0% /sys/fs/cgroup
+/dev/xvda1       10G  1.3G  8.7G  13% /
+tmpfs            99M     0   99M   0% /run/user/1000
+/dev/xvdf       3.0G   36M  3.0G   2% /ebs
+this is the way we can do , but when we restart the server , we will loose the volume created newly
+so we need to add permanently by below steps
+***********************************
+Automatically Mount an Attached Volume After Reboot
+*****************************
+To mount an attached EBS volume on every system reboot, add an entry for the device to the /etc/fstab file.
+
+Create a backup of your /etc/fstab file that you can use if you accidentally destroy or delete this file while editing it.
+
+[root@ip-172-31-27-91 ~]# sudo cp /etc/fstab /etc/fstab.orig
+
+Use the blkid command to find the UUID of the device.
+[root@ip-172-31-27-91 ~]# sudo blkid
+/dev/xvda1: LABEL="/" UUID="8a9e0fcb-f415-4a3f-931d-919fadf8e22c" TYPE="xfs" PARTLABEL="Linux" PARTUUID="0460b53b-6702-4a24-bcc4-0c63e5436ad1"
+/dev/xvdf: UUID="860eaf5f-5be4-46a1-b24b-cd1238680ab2" TYPE="xfs"
+
+Open the /etc/fstab file using any text editor, such as nano or vim.
+
+[ec2-user ~]$ sudo vim /etc/fstab
+Add the following entry to /etc/fstab to mount the device at the specified mount point. The fields are the UUID value returned by blkid, the mount point, the file system, and the recommended file system mount options. For more information, see the manual page for fstab (run man fstab).
+
+UUID=aebf131c-6957-451e-8d34-ec978d9581ae  /data  xfs  defaults,nofail  0  2
+
+To verify that your entry works, run the following commands to unmount the device and then mount all file systems in /etc/fstab. If there are no errors, the /etc/fstab file is OK and your file system will mount automatically after it is rebooted.
+
+[ec2-user ~]$ sudo umount /data
+[ec2-user ~]$ sudo mount -a
+
+
+
